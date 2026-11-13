@@ -1,16 +1,14 @@
 import { ExecucaoServico } from '../../../enterprise/entities/execucao-servico.entity';
-import { StatusOS } from '../../../enterprise/value-objects/status-os.vo';
-import { StatusOSValues } from '../../../enterprise/value-objects/status-os.vo';
 import { StatusExecucaoValues } from '../../../enterprise/value-objects/status-execucao.vo';
 import { IExecucaoServicoGateway } from '../../ports/execucao-servico.gateway.port';
-import { IOrdemServicoGateway } from '../../ports/ordem-servico.gateway.port';
+import { ExecutionOrderPort } from '../../ports/execution-order.port';
 import { IObservabilityPort } from '../../ports/observability.port';
 import { BusinessEvent } from '../../observability/business-events';
 
 export class FinalizarExecucaoUseCase {
     constructor(
         private readonly execucaoServicoGateway: IExecucaoServicoGateway,
-        private readonly ordemServicoGateway: IOrdemServicoGateway,
+        private readonly ordemServicoGateway: ExecutionOrderPort,
         private readonly observability: IObservabilityPort
     ) {}
 
@@ -54,32 +52,8 @@ export class FinalizarExecucaoUseCase {
         );
 
         if (todasFinalizadas && execucoes.length > 0) {
-            const ordem = await this.ordemServicoGateway.findById(ordemServicoId);
-
-            if (!ordem) {
-                throw new Error(
-                    `Ordem de serviço não encontrada para o id ${ordemServicoId}.`
-                );
-            }
-
-            if (ordem.status.value === StatusOSValues.FINALIZADA || ordem.status.value === StatusOSValues.ENTREGUE) {
-                await this.ordemServicoGateway.update(ordemServicoId, { status: StatusOS.from(StatusOSValues.FINALIZADA) });
-                return;
-            }
-            const transition = ordem.transicionarStatus(StatusOS.from(StatusOSValues.FINALIZADA));
-            await this.ordemServicoGateway.update(ordemServicoId, ordem);
-
-            this.observability.emit({
-                msg: BusinessEvent.osAutoFinalized,
-                ordemServicoId,
-            });
-            this.observability.emit({
-                msg: BusinessEvent.osStatusChanged,
-                ordemServicoId,
-                from: transition.from,
-                to: transition.to,
-                durationMs: transition.durationMs,
-            });
+            await this.ordemServicoGateway.complete(ordemServicoId);
+            this.observability.emit({ msg: BusinessEvent.execucaoCompletionReported, ordemServicoId });
         }
     }
 }

@@ -1,3 +1,4 @@
+import { createExecutionControllers } from '../infrastructure/composition-root/execution-container';
 import { createExecutionRoutes } from '../infrastructure/http/execution-routes';
 import express, { NextFunction, Request, Response } from 'express';
 import { timingSafeEqual } from 'crypto';
@@ -29,7 +30,7 @@ export async function createExecutionApp(db: Db) {
  const app = express(); app.use(express.json({ limit: '128kb' }));
  app.get('/health', (_req, res) => res.json({ status: 'ok' }));
  app.get('/ready', async (_req, res) => { try { await db.command({ ping: 1 }); res.json({ status: 'ok' }); } catch { res.status(503).json({ error: 'database unavailable' }); } });
- app.use('/api', createExecutionRoutes(db));
+ app.use('/api', createExecutionRoutes(createExecutionControllers(db)));
  app.use('/internal', (req: Request, res: Response, next: NextFunction) => {
   const provided = req.header('x-internal-api-key');
   if (!provided || Buffer.byteLength(provided) !== Buffer.byteLength(INTERNAL_API_KEY) || !timingSafeEqual(Buffer.from(provided), Buffer.from(INTERNAL_API_KEY))) return res.status(401).json({ error: 'unauthorized' });

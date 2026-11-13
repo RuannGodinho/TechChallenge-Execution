@@ -1,50 +1,13 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { Db, ObjectId } from 'mongodb';
-import { PecaController } from '../../Adapters/controllers/peca.controller';
-import { ServicoController } from '../../Adapters/controllers/servico.controller';
-import { ExecucaoServicoController } from '../../Adapters/controllers/execucao-servico.controller';
-import { PecaMongoGateway } from '../../Adapters/gateways/peca.mongo.gateway';
-import { ServicoMongoGateway } from '../../Adapters/gateways/servico.mongo.gateway';
-import { ExecucaoServicoMongoGateway } from '../../Adapters/gateways/execucao-servico.mongo.gateway';
-import { PecaPresenter } from '../../Adapters/presenters/peca.presenter';
-import { ServicoPresenter } from '../../Adapters/presenters/servico.presenter';
-import { ExecucaoServicoPresenter } from '../../Adapters/presenters/execucao-servico.presenter';
-import { ListarExecucoesPorOrdemUseCase } from '../../application/usecases/execucao-servico/listar-execucoes-por-ordem.usecase';
-import { IniciarExecucaoUseCase } from '../../application/usecases/execucao-servico/iniciar-execucao.usecase';
-import { FinalizarExecucaoUseCase } from '../../application/usecases/execucao-servico/finalizar-execucao.usecase';
-import { ObterTempoMedioServicosUseCase } from '../../application/usecases/execucao-servico/obter-tempo-medio-servicos.usecase';
-import { OrdemServicoHttpGateway } from '../../Adapters/gateways/ordem-servico.http.gateway';
-import { AtomicEstoqueController } from '../../Adapters/controllers/atomic-estoque.controller';
+import { ObjectId } from 'mongodb';
 import { apiAuth } from './api-auth';
-import { ListarPecasUseCase } from '../../application/usecases/peca/listar-pecas.usecase';
-import { BuscarPecaPorIdUseCase } from '../../application/usecases/peca/buscar-peca-por-id.usecase';
-import { CriarPecaUseCase } from '../../application/usecases/peca/criar-peca.usecase';
-import { AtualizarPecaUseCase } from '../../application/usecases/peca/atualizar-peca.usecase';
-import { DeletarPecaUseCase } from '../../application/usecases/peca/deletar-peca.usecase';
-import { ListarServicosUseCase } from '../../application/usecases/servico/listar-servicos.usecase';
-import { BuscarServicoPorIdUseCase } from '../../application/usecases/servico/buscar-servico-por-id.usecase';
-import { CriarServicoUseCase } from '../../application/usecases/servico/criar-servico.usecase';
-import { AtualizarServicoUseCase } from '../../application/usecases/servico/atualizar-servico.usecase';
-import { DeletarServicoUseCase } from '../../application/usecases/servico/deletar-servico.usecase';
+import type { createExecutionControllers } from '../composition-root/execution-container';
+import { InventoryRuleError } from '../../enterprise/entities/inventory-error';
+import { ExecutionOrderUnavailableError } from '../../application/ports/execution-order.port';
 
-export function createExecutionRoutes(db: Db) {
+export function createExecutionRoutes({ peca, servico, stock, execucao }: ReturnType<typeof createExecutionControllers>) {
     const router = Router();
     router.use(apiAuth);
-    const parts = new PecaMongoGateway(db);
-    const services = new ServicoMongoGateway(db);
-    const peca = new PecaController(new ListarPecasUseCase(parts), new BuscarPecaPorIdUseCase(parts), new CriarPecaUseCase(parts), new AtualizarPecaUseCase(parts), new DeletarPecaUseCase(parts), new PecaPresenter());
-    const servico = new ServicoController(new ListarServicosUseCase(services), new BuscarServicoPorIdUseCase(services), new CriarServicoUseCase(services), new AtualizarServicoUseCase(services), new DeletarServicoUseCase(services), new ServicoPresenter());
-    const stock = new AtomicEstoqueController(db);
-    const executions = new ExecucaoServicoMongoGateway(db);
-    const orders = new OrdemServicoHttpGateway();
-    const observability = { emit: (event: unknown) => console.info(event) };
-    const execucao = new ExecucaoServicoController(
-        () => new ListarExecucoesPorOrdemUseCase(executions),
-        () => new IniciarExecucaoUseCase(executions, orders, observability),
-        () => new FinalizarExecucaoUseCase(executions, orders, observability),
-        () => new ObterTempoMedioServicosUseCase(executions),
-        () => new ExecucaoServicoPresenter(),
-    );
     const handle = (fn: (req: Request, res: Response) => Promise<unknown>) => (req: Request, res: Response, next: NextFunction) => { void fn(req, res).catch(next); };
     router.param('id', (req, res, next, id) => ObjectId.isValid(id) ? next() : res.status(400).json({ error: 'ID inválido' }));
     router.param('pecaId', (req, res, next, id) => ObjectId.isValid(id) ? next() : res.status(400).json({ error: 'ID inválido' }));
@@ -69,7 +32,7 @@ export function createExecutionRoutes(db: Db) {
     router.get('/metricas/tempo-medio-servicos', handle(async (_req, res) => res.json(await execucao.getTempoMedioServicos())));
     router.use((error: Error & { status?: number }, _req: Request, res: Response, _next: NextFunction) => {
         console.error(error);
-        const status = error.status ?? (error.name === 'MongoServerError' ? 503 : /não encontrad/.test(error.message) ? 404 : 400);
+        const status = (error instanceof InventoryRuleError ? ({ invalid: 400, not_found: 404, conflict: 409 }[error.kind]) : error instanceof ExecutionOrderUnavailableError ? 502 : undefined) ?? error.status ?? (error.name === 'MongoServerError' ? 503 : /não encontrad/.test(error.message) ? 404 : 400);
         res.status(status).json({ error: error.message });
     });
     return router;

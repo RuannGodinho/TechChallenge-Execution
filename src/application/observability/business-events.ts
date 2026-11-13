@@ -1,4 +1,5 @@
 export const BusinessEvent = {
+    execucaoCompletionReported: 'execucao_completion_reported',
     osCreated: 'os_created',
     osCreateRejected: 'os_create_rejected',
     osStatusChanged: 'os_status_changed',

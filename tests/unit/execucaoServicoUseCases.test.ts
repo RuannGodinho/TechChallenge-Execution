@@ -1,6 +1,5 @@
 import { ObjectId } from 'mongodb';
 import { ExecucaoServico } from '../../src/enterprise/entities/execucao-servico.entity';
-import { OrdemServico } from '../../src/enterprise/entities/ordem-servico.entity';
 import { StatusOSValues } from '../../src/enterprise/value-objects/status-os.vo';
 import { IExecucaoServicoGateway } from '../../src/application/ports/execucao-servico.gateway.port';
 import { IOrdemServicoGateway } from '../../src/application/ports/ordem-servico.gateway.port';
@@ -36,11 +35,8 @@ describe('ExecucaoServico use cases', () => {
         };
 
         ordemGateway = {
-            findAll: jest.fn(),
             findById: jest.fn(),
-            findByCpfCnpj: jest.fn(),
-            save: jest.fn(),
-            update: jest.fn().mockResolvedValue(null),
+            complete: jest.fn().mockResolvedValue(undefined),
         };
 
         servicoLookup = {
@@ -73,7 +69,7 @@ describe('ExecucaoServico use cases', () => {
 
     test('deve criar execuções pendentes para serviços novos', async () => {
         ordemGateway.findById.mockResolvedValue(
-            OrdemServico.create({ cpfCnpj: '11144477735', veiculoId: new ObjectId().toString() })
+            { id: ordemId, canStart: false }
         );
 
         await criarExecucoesUseCase.execute({ ordemServicoId: ordemId, servicoIds: [servicoId] });
@@ -90,7 +86,7 @@ describe('ExecucaoServico use cases', () => {
 
     test('deve ignorar serviços que já possuem execução', async () => {
         ordemGateway.findById.mockResolvedValue(
-            OrdemServico.create({ cpfCnpj: '11144477735', veiculoId: new ObjectId().toString() })
+            { id: ordemId, canStart: false }
         );
         execucaoGateway.findByOrdemServicoId.mockResolvedValue([
             ExecucaoServico.create(ordemId, servicoId),
@@ -107,15 +103,7 @@ describe('ExecucaoServico use cases', () => {
 
         execucaoGateway.findById.mockResolvedValue(execucao);
         ordemGateway.findById.mockResolvedValue(
-            OrdemServico.restore({
-                id: ordemId,
-                cpfCnpj: '11144477735',
-                veiculoId: new ObjectId().toString(),
-                status: StatusOSValues.EM_EXECUCAO,
-                dataAbertura: new Date(),
-                pecas: [],
-                servicos: [servicoId],
-            })
+            { id: ordemId, canStart: true }
         );
         execucaoGateway.update.mockResolvedValue(
             ExecucaoServico.restore({
@@ -147,15 +135,7 @@ describe('ExecucaoServico use cases', () => {
 
         execucaoGateway.findById.mockResolvedValue(execucao);
         ordemGateway.findById.mockResolvedValue(
-            OrdemServico.restore({
-                id: ordemId,
-                cpfCnpj: '11144477735',
-                veiculoId: new ObjectId().toString(),
-                status: StatusOSValues.RECEBIDA,
-                dataAbertura: new Date(),
-                pecas: [],
-                servicos: [servicoId],
-            })
+            { id: ordemId, canStart: false }
         );
 
         await expect(iniciarExecucaoUseCase.execute('exec-1')).rejects.toThrow(
@@ -221,38 +201,17 @@ describe('ExecucaoServico use cases', () => {
             }),
         ]);
         ordemGateway.findById.mockResolvedValue(
-            OrdemServico.restore({
-                id: ordemId,
-                cpfCnpj: '11144477735',
-                veiculoId: new ObjectId().toString(),
-                status: StatusOSValues.EM_EXECUCAO,
-                dataAbertura: new Date(),
-                pecas: [],
-                servicos: [servicoId],
-            })
+            { id: ordemId, canStart: true }
         );
-        ordemGateway.update.mockImplementation(async (_id, ordem) => ordem as OrdemServico);
 
         const result = await finalizarExecucaoUseCase.execute('exec-1');
 
         expect(result.status.value).toBe('FINALIZADO');
-        expect(ordemGateway.update).toHaveBeenCalledWith(
-            ordemId,
-            expect.objectContaining({
-                status: expect.objectContaining({ value: StatusOSValues.FINALIZADA }),
-            })
-        );
+        expect(ordemGateway.complete).toHaveBeenCalledWith(ordemId);
         expect(observability.emit).toHaveBeenCalledWith(
             expect.objectContaining({
-                msg: BusinessEvent.osAutoFinalized,
+                msg: BusinessEvent.execucaoCompletionReported,
                 ordemServicoId: ordemId,
-            })
-        );
-        expect(observability.emit).toHaveBeenCalledWith(
-            expect.objectContaining({
-                msg: BusinessEvent.osStatusChanged,
-                from: StatusOSValues.EM_EXECUCAO,
-                to: StatusOSValues.FINALIZADA,
             })
         );
     });

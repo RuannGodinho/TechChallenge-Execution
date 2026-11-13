@@ -1,6 +1,5 @@
 import { CriarExecucoesParaServicosInputDto } from '../../dtos/execucao-servico/execucao-servico.dtos';
 import { ExecucaoServico } from '../../../enterprise/entities/execucao-servico.entity';
-import { OrdemServico } from '../../../enterprise/entities/ordem-servico.entity';
 import { IExecucaoServicoGateway } from '../../ports/execucao-servico.gateway.port';
 import { IOrdemServicoGateway } from '../../ports/ordem-servico.gateway.port';
 import { IServicoLookupPort } from '../../ports/servico-lookup.port';
@@ -21,7 +20,7 @@ export class CriarExecucoesParaServicosUseCase {
             );
         }
 
-        const servicoIdsUnicos = OrdemServico.dedupeServicos(input.servicoIds);
+        const servicoIdsUnicos = [...new Set(input.servicoIds)];
         const execucoesExistentes = await this.execucaoServicoGateway.findByOrdemServicoId(
             input.ordemServicoId
         );

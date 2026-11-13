@@ -1,14 +1,13 @@
 import { ExecucaoServico } from '../../../enterprise/entities/execucao-servico.entity';
-import { StatusOSValues } from '../../../enterprise/value-objects/status-os.vo';
 import { IExecucaoServicoGateway } from '../../ports/execucao-servico.gateway.port';
-import { IOrdemServicoGateway } from '../../ports/ordem-servico.gateway.port';
+import { ExecutionOrderPort } from '../../ports/execution-order.port';
 import { IObservabilityPort } from '../../ports/observability.port';
 import { BusinessEvent, BusinessReason } from '../../observability/business-events';
 
 export class IniciarExecucaoUseCase {
     constructor(
         private readonly execucaoServicoGateway: IExecucaoServicoGateway,
-        private readonly ordemServicoGateway: IOrdemServicoGateway,
+        private readonly ordemServicoGateway: ExecutionOrderPort,
         private readonly observability: IObservabilityPort
     ) {}
 
@@ -29,7 +28,7 @@ export class IniciarExecucaoUseCase {
             );
         }
 
-        if (ordem.status.value !== StatusOSValues.EM_EXECUCAO) {
+        if (!ordem.canStart) {
             this.observability.emit({
                 msg: BusinessEvent.osProcessingFailed,
                 alert: true,
