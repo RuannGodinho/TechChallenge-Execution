@@ -21,6 +21,10 @@ export class FinalizarExecucaoUseCase {
             throw new Error(`Execução não encontrada para o id ${id}.`);
         }
 
+        if (execucao.status.value === StatusExecucaoValues.FINALIZADO) {
+            await this.finalizarOrdemServicoSeNecessario(execucao.ordemServicoId);
+            return execucao;
+        }
         execucao.finalizar();
 
         const atualizado = await this.execucaoServicoGateway.update(id, {
@@ -58,6 +62,10 @@ export class FinalizarExecucaoUseCase {
                 );
             }
 
+            if (ordem.status.value === StatusOSValues.FINALIZADA || ordem.status.value === StatusOSValues.ENTREGUE) {
+                await this.ordemServicoGateway.update(ordemServicoId, { status: StatusOS.from(StatusOSValues.FINALIZADA) });
+                return;
+            }
             const transition = ordem.transicionarStatus(StatusOS.from(StatusOSValues.FINALIZADA));
             await this.ordemServicoGateway.update(ordemServicoId, ordem);
 

@@ -1,3 +1,5 @@
+> Endpoint migration update: original Portuguese `/api` paths are restored in their owning service. See [restored endpoints and configuration](docs/ENDPOINT-MIGRATION.md). The extraction notes below describe earlier limitations; the endpoint inventory and execution-completion behavior are superseded by that document.
+
 # Execution service — extraction in progress
 
 This repository extracts the original project's catalog, inventory and service-execution domain, use cases, MongoDB gateways and focused unit tests. It uses its own `execution` MongoDB database. The initial HTTP process currently exposes only authenticated internal catalog operations and idempotent scheduling; it is **not yet a complete Execution microservice**.

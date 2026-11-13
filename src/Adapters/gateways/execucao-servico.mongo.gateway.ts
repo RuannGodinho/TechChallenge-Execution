@@ -96,11 +96,13 @@ export class ExecucaoServicoMongoGateway implements IExecucaoServicoGateway {
         }
 
         const result = await this.collection.findOneAndUpdate(
-            { _id: new ObjectId(id) },
+            { _id: new ObjectId(id), ...(execucao.status ? { status: execucao.status.value === 'EM EXECUCAO' ? 'PENDENTE' : 'EM EXECUCAO' } : {}) },
             { $set: updates },
             { returnDocument: 'after' }
         );
 
-        return result ? ExecucaoServicoMapper.toDomain(result) : null;
+        if (result) return ExecucaoServicoMapper.toDomain(result);
+        const current = await this.findById(id);
+        return current?.status.value === execucao.status?.value ? current : null;
     }
 }

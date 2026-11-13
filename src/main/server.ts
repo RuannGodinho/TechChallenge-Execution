@@ -1,6 +1,7 @@
+import { createExecutionRoutes } from '../infrastructure/http/execution-routes';
 import express, { NextFunction, Request, Response } from 'express';
 import { timingSafeEqual } from 'crypto';
-import { MongoClient, ObjectId } from 'mongodb';
+import { Db, MongoClient, ObjectId } from 'mongodb';
 import { ExecucaoServicoMongoGateway } from '../Adapters/gateways/execucao-servico.mongo.gateway';
 import { InventoryOperationsMongoGateway, InventoryConflictError, InventoryUnavailableError } from '../Adapters/gateways/inventory-operations.mongo.gateway';
 import { OperarInventarioUseCase } from '../application/usecases/estoque/operar-inventario.usecase';
@@ -16,11 +17,10 @@ import { BuscarServicoPorIdUseCase } from '../application/usecases/servico/busca
 
 async function servicesCheckPart(parts: PecaMongoGateway, id: string): Promise<boolean> { return !!await parts.findById(id); }
 
-async function main() {
- const { MONGODB_URI, INTERNAL_API_KEY } = process.env;
- if (!MONGODB_URI || !INTERNAL_API_KEY) throw new Error('MONGODB_URI and INTERNAL_API_KEY are required');
- const client = new MongoClient(MONGODB_URI); await client.connect();
- const db = client.db(); const parts = new PecaMongoGateway(db); const services = new ServicoMongoGateway(db);
+export async function createExecutionApp(db: Db) {
+ const INTERNAL_API_KEY = process.env.INTERNAL_API_KEY;
+ if (!INTERNAL_API_KEY) throw new Error('INTERNAL_API_KEY is required');
+ const parts = new PecaMongoGateway(db); const services = new ServicoMongoGateway(db);
  await db.collection('Estoque').createIndex({ pecaId: 1 }, { unique: true });
  const inventory = new OperarInventarioUseCase(new InventoryOperationsMongoGateway(db));
  await db.collection('ExecucoesServico').createIndex({ ordemServicoId: 1, servicoId: 1 }, { unique: true });
@@ -29,6 +29,7 @@ async function main() {
  const app = express(); app.use(express.json({ limit: '128kb' }));
  app.get('/health', (_req, res) => res.json({ status: 'ok' }));
  app.get('/ready', async (_req, res) => { try { await db.command({ ping: 1 }); res.json({ status: 'ok' }); } catch { res.status(503).json({ error: 'database unavailable' }); } });
+ app.use('/api', createExecutionRoutes(db));
  app.use('/internal', (req: Request, res: Response, next: NextFunction) => {
   const provided = req.header('x-internal-api-key');
   if (!provided || Buffer.byteLength(provided) !== Buffer.byteLength(INTERNAL_API_KEY) || !timingSafeEqual(Buffer.from(provided), Buffer.from(INTERNAL_API_KEY))) return res.status(401).json({ error: 'unauthorized' });
@@ -61,8 +62,16 @@ async function main() {
  app.get('/internal/services/:id', async (req, res) => { try { const item = await new BuscarServicoPorIdUseCase(services).execute(req.params.id as string); return item ? res.json(servicePresenter.present(item)) : res.status(404).json({ error: 'service not found' }); } catch { return res.status(503).json({ error: 'database unavailable' }); } });
  app.post('/internal/parts', async (req, res) => { try { return res.status(201).json(partPresenter.present(await new CriarPecaUseCase(parts).execute(req.body))); } catch { return res.status(400).json({ error: 'cannot create part' }); } });
  app.post('/internal/services', async (req, res) => { try { return res.status(201).json(servicePresenter.present(await new CriarServicoUseCase(services).execute(req.body))); } catch { return res.status(400).json({ error: 'cannot create service' }); } });
+ return app;
+}
+
+async function main() {
+ const { MONGODB_URI, INTERNAL_API_KEY } = process.env;
+ if (!MONGODB_URI || !INTERNAL_API_KEY) throw new Error('MONGODB_URI and INTERNAL_API_KEY are required');
+ const client = new MongoClient(MONGODB_URI); await client.connect();
+ const app = await createExecutionApp(client.db());
  const server = app.listen(Number(process.env.PORT ?? 3001), () => console.log('Execution catalog listening'));
  const stop = () => server.close(() => { void client.close().then(() => process.exit(0)); });
  process.on('SIGTERM', stop); process.on('SIGINT', stop);
 }
-main().catch(error => { console.error(error); process.exitCode = 1; });
+if (require.main === module) main().catch(error => { console.error(error); process.exitCode = 1; });
