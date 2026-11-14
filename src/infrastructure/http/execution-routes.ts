@@ -1,3 +1,4 @@
+import { ExecutionLifecycleConflict } from '../../enterprise/entities/execution-completion-event';
 import { Router, Request, Response, NextFunction } from 'express';
 import { ObjectId } from 'mongodb';
 import { apiAuth } from './api-auth';
@@ -32,7 +33,7 @@ export function createExecutionRoutes({ peca, servico, stock, execucao }: Return
     router.get('/metricas/tempo-medio-servicos', handle(async (_req, res) => res.json(await execucao.getTempoMedioServicos())));
     router.use((error: Error & { status?: number }, _req: Request, res: Response, _next: NextFunction) => {
         console.error(error);
-        const status = (error instanceof InventoryRuleError ? ({ invalid: 400, not_found: 404, conflict: 409 }[error.kind]) : error instanceof ExecutionOrderUnavailableError ? 502 : undefined) ?? error.status ?? (error.name === 'MongoServerError' ? 503 : /não encontrad/.test(error.message) ? 404 : 400);
+        const status = (error instanceof ExecutionLifecycleConflict ? 409 : error instanceof InventoryRuleError ? ({ invalid: 400, not_found: 404, conflict: 409 }[error.kind]) : error instanceof ExecutionOrderUnavailableError ? 502 : undefined) ?? error.status ?? (error.name === 'MongoServerError' ? 503 : /não encontrad/.test(error.message) ? 404 : 400);
         res.status(status).json({ error: error.message });
     });
     return router;

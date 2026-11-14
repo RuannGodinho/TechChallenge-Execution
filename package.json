@@ -8,7 +8,8 @@
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "coverage": "jest --coverage",
-    "check:architecture": "node scripts/check-architecture.cjs"
+    "check:architecture": "node scripts/check-architecture.cjs",
+    "execution-publisher": "node --import tsx ./src/infrastructure/messaging/execution-publisher.ts"
   },
   "dependencies": {
     "amqplib": "^0.10.9",

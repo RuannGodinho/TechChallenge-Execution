@@ -1,21 +1,32 @@
-> Endpoint migration update: original Portuguese `/api` paths are restored in their owning service. See [restored endpoints and configuration](docs/ENDPOINT-MIGRATION.md). The extraction notes below describe earlier limitations; the endpoint inventory and execution-completion behavior are superseded by that document.
+# Execution service
 
-# Execution service — extraction in progress
+Execution owns parts, services, inventory, execution scheduling and execution lifecycle, with its own MongoDB database.
 
-This repository extracts the original project's catalog, inventory and service-execution domain, use cases, MongoDB gateways and focused unit tests. It uses its own `execution` MongoDB database. The initial HTTP process currently exposes only authenticated internal catalog operations and idempotent scheduling; it is **not yet a complete Execution microservice**.
+The original Portuguese HTTP paths are served here: `/api/pecas`, `/api/servicos`, `/api/estoque`, `/api/execucoes-servico`, and `/api/metricas/tempo-medio-servicos`. Existing internal catalog, inventory and scheduling endpoints remain available. See [endpoint contracts](docs/ENDPOINT-MIGRATION.md).
 
-## Local development
+## Local Docker and RabbitMQ
 
-Use Node 20. Copy `.env.example` to `.env`, set a unique `INTERNAL_API_KEY`, then run `npm ci`, `npm run typecheck`, and `npm test`. `docker compose up --build` starts the catalog process with its own MongoDB on port 27018. Internal requests require `x-internal-api-key`. Health endpoints are `/health` and `/ready`.
+Configure this repository's `.env`, including `RABBITMQ_URL`, then start its database, API, and publisher:
 
-Current endpoints: `POST /internal/inventory/check`, `POST /internal/inventory/consume`, `POST /internal/inventory/receive`, `GET /internal/parts/:id`, `GET /internal/services/:id`, `POST /internal/parts`, `POST /internal/services`, and `POST /internal/executions` (with `{ordemServicoId,servicoIds}`). Scheduling validates services against the local catalog and uses a unique order/service index to make retries safe. It trusts the authenticated Service Orders caller to provide a valid order. Set Service Orders `EXECUTION_INTERNAL_API_KEY` to the same value.
+```bash
+docker compose up -d --build
+```
 
-## Remaining extraction
+For a local shared broker, start Billing's Compose first and use `host.docker.internal:5672` in `RABBITMQ_URL`, with matching credentials and vhost. No sibling repository paths, shared Docker network, or profile flags are required. In separate environments, configure the reachable broker hostname. Workers reconnect if the broker is temporarily unavailable. See [messaging setup, queues, recovery and tests](docs/RABBITMQ.md). Execution's Compose uses the existing MongoDB volume with the `execution-rs` development replica set. No volume deletion is required. Host MongoDB access uses port 27018 with `directConnection=true`.
 
-The extracted execution use cases still depend on an order gateway interface inherited from the monolith. No gateway in this service may access the Service Orders database. Execution start/finish, inventory operations and transactional reservations have not yet been exposed or integrated; the inherited inventory movement use case is not safe against concurrent updates. A durable outbox, messaging, completion notification, API gateway integration, Kubernetes deployment and end-to-end verification are also outstanding. Do not run this as a finished production service.
+`EXECUTION_COMPLETION_TRANSPORT=rabbitmq` records completion and its durable outbox event in one transaction. `execution-publisher` publishes to `execution.events`; Service Orders and Billing receive independent deliveries through their own queues. The `http` transport retains the synchronous compatibility path.
 
-## Inventory operations
+## Authentication and checks
 
-All operations require the internal API key. `check` accepts `{pecaId, quantidade}` and optionally `ordemServicoId`; `consume` requires `{pecaId, quantidade, ordemServicoId}`; `receive` requires `{pecaId, quantidade, operationId}`. Quantities must be positive integers and the part must exist before receiving stock. Consumption is atomic per part and retries for the same order and part are idempotent; reusing the key with a different quantity is a conflict. Receipt operation IDs are idempotent per part. Inventory movements are embedded in the stock document, with MongoDB document-size limits.
+Use a Service Orders JWT for `/api` routes, with the same `JWT_SECRET`, or the owner's internal key for trusted callers. `/internal` routes require `x-internal-api-key`. Configure Service Orders lookup credentials for start eligibility.
 
-This is not a reservation or a cross-part transaction: a failure between multiple part consumptions can leave a partial operation requiring reconciliation. The legacy inventory use case is still present for reference and must not be exposed because it uses unsafe read-modify-write. The new operations and unique indexes require integration testing against MongoDB before deployment.
+```bash
+npm ci
+npm run typecheck
+npm run check:architecture
+npm test -- --runInBand --coverage=false
+```
+
+Optional database integration tests use `TEST_EXECUTION_MONGO_URL=mongodb://127.0.0.1:27018/?directConnection=true`. They create and remove isolated test databases. See [architecture notes](docs/ARCHITECTURE-REFACTOR.md).
+
+Inventory updates and movement records are atomic per part. Operations spanning multiple parts are not a single stock reservation or distributed transaction. Cloud deployment and provider integrations require separate environment validation.

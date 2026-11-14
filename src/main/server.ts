@@ -1,3 +1,4 @@
+import { ExecutionLifecycleConflict } from '../enterprise/entities/execution-completion-event';
 import { createExecutionControllers } from '../infrastructure/composition-root/execution-container';
 import { createExecutionRoutes } from '../infrastructure/http/execution-routes';
 import express, { NextFunction, Request, Response } from 'express';
@@ -25,7 +26,7 @@ export async function createExecutionApp(db: Db) {
  await db.collection('Estoque').createIndex({ pecaId: 1 }, { unique: true });
  const inventory = new OperarInventarioUseCase(new InventoryOperationsMongoGateway(db));
  await db.collection('ExecucoesServico').createIndex({ ordemServicoId: 1, servicoId: 1 }, { unique: true });
- const schedule = new AgendarExecucoesUseCase(new ExecucaoServicoMongoGateway(db), services);
+ const schedule = new AgendarExecucoesUseCase(new ExecucaoServicoMongoGateway(db, process.env.EXECUTION_COMPLETION_TRANSPORT === 'rabbitmq'), services);
  const partPresenter = new PecaPresenter(); const servicePresenter = new ServicoPresenter();
  const app = express(); app.use(express.json({ limit: '128kb' }));
  app.get('/health', (_req, res) => res.json({ status: 'ok' }));
@@ -57,7 +58,7 @@ export async function createExecutionApp(db: Db) {
   const { ordemServicoId, servicoIds } = req.body ?? {};
   if (typeof ordemServicoId !== 'string' || !ObjectId.isValid(ordemServicoId) || !Array.isArray(servicoIds) || !servicoIds.every((id: unknown) => typeof id === 'string' && ObjectId.isValid(id))) return res.status(400).json({ error: 'invalid order or service ids' });
   try { await schedule.execute(ordemServicoId, servicoIds); return res.status(204).end(); }
-  catch (error) { if (error instanceof Error && error.message.startsWith('Serviço não encontrado')) return res.status(404).json({ error: error.message }); return res.status(503).json({ error: 'execution scheduling unavailable' }); }
+  catch (error) { if(error instanceof ExecutionLifecycleConflict) return res.status(409).json({error:error.message}); if (error instanceof Error && error.message.startsWith('Serviço não encontrado')) return res.status(404).json({ error: error.message }); return res.status(503).json({ error: 'execution scheduling unavailable' }); }
  });
  app.get('/internal/parts/:id', async (req, res) => { try { const item = await new BuscarPecaPorIdUseCase(parts).execute(req.params.id as string); return item ? res.json(partPresenter.present(item)) : res.status(404).json({ error: 'part not found' }); } catch { return res.status(503).json({ error: 'database unavailable' }); } });
  app.get('/internal/services/:id', async (req, res) => { try { const item = await new BuscarServicoPorIdUseCase(services).execute(req.params.id as string); return item ? res.json(servicePresenter.present(item)) : res.status(404).json({ error: 'service not found' }); } catch { return res.status(503).json({ error: 'database unavailable' }); } });

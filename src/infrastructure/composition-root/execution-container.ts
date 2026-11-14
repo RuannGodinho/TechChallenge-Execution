@@ -1,3 +1,4 @@
+import { ExecutionOrderMessagingGateway } from '../../Adapters/gateways/execution-order.messaging.gateway';
 import { Db } from 'mongodb';
 import { PecaController } from '../../Adapters/controllers/peca.controller';
 import { ServicoController } from '../../Adapters/controllers/servico.controller';
@@ -37,8 +38,9 @@ export function createExecutionControllers(db: Db) {
     const servico = new ServicoController(new ListarServicosUseCase(services), new BuscarServicoPorIdUseCase(services), new CriarServicoUseCase(services), new AtualizarServicoUseCase(services), new DeletarServicoUseCase(services), new ServicoPresenter());
     const stockGateway = new AtomicStockMongoGateway(db);
     const stock = new AtomicEstoqueController(new ConsultarEstoqueUseCase(stockGateway), new RegistrarMovimentacaoAtomicaUseCase(stockGateway, parts, randomUUID));
-    const executions = new ExecucaoServicoMongoGateway(db);
-    const orders = new OrdemServicoHttpGateway(process.env.SERVICE_ORDERS_URL, process.env.SERVICE_ORDERS_INTERNAL_API_KEY);
+    const executions = new ExecucaoServicoMongoGateway(db, process.env.EXECUTION_COMPLETION_TRANSPORT === 'rabbitmq');
+    const reader = new OrdemServicoHttpGateway(process.env.SERVICE_ORDERS_URL, process.env.SERVICE_ORDERS_INTERNAL_API_KEY);
+    const orders = process.env.EXECUTION_COMPLETION_TRANSPORT === 'rabbitmq' ? new ExecutionOrderMessagingGateway(reader,executions) : reader;
     const observability = { emit: (event: unknown) => console.info(event) };
     const execucao = new ExecucaoServicoController(
         () => new ListarExecucoesPorOrdemUseCase(executions),

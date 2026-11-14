@@ -1,24 +1,56 @@
 services:
   mongodb:
     image: mongo:8
+    command: ["mongod", "--replSet", "execution-rs", "--bind_ip_all"]
     ports:
       - "127.0.0.1:27018:27017"
     volumes:
       - execution_data:/data/db
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      test: ["CMD", "mongosh", "--quiet", "--eval", "quit(db.hello().isWritablePrimary ? 0 : 1)"]
       interval: 5s
       timeout: 3s
-      retries: 10
+      retries: 30
+      start_period: 5s
+  mongodb-init:
+    image: mongo:8
+    depends_on:
+      mongodb:
+        condition: service_started
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        until mongosh --host mongodb:27017 --quiet --eval 'db.adminCommand({ping:1}).ok' >/dev/null 2>&1; do sleep 1; done
+        mongosh --host mongodb:27017 --quiet --eval 'try { rs.status(); } catch (e) { if (e.codeName !== "NotYetInitialized") throw e; rs.initiate({_id:"execution-rs",members:[{_id:0,host:"mongodb:27017"}]}); }'
   execution:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     build: .
     env_file: .env
+    restart: unless-stopped
     environment:
-      MONGODB_URI: mongodb://mongodb:27017/execution
+      MONGODB_URI: mongodb://mongodb:27017/execution?replicaSet=execution-rs
+      EXECUTION_COMPLETION_TRANSPORT: ${EXECUTION_COMPLETION_TRANSPORT:-rabbitmq}
     ports:
       - "3001:3001"
     depends_on:
       mongodb:
         condition: service_healthy
+      mongodb-init:
+        condition: service_completed_successfully
+  execution-publisher:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    build: .
+    env_file: .env
+    restart: unless-stopped
+    environment:
+      MONGODB_URI: mongodb://mongodb:27017/execution?replicaSet=execution-rs
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      mongodb-init:
+        condition: service_completed_successfully
+    command: npm run execution-publisher
 volumes:
   execution_data:
