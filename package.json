@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "coverage": "jest --coverage",
+    "sonar": "node --env-file=.env scripts/run-sonar.cjs",
     "check:architecture": "node scripts/check-architecture.cjs",
     "execution-publisher": "node --import tsx ./src/infrastructure/messaging/execution-publisher.ts",
     "seed": "node src/mongo-init/seed.js",

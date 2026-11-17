@@ -26,12 +26,25 @@ Use a Service Orders JWT for `/api` routes, with the same `JWT_SECRET`, or the o
 npm ci
 npm run typecheck
 npm run check:architecture
-npm test -- --runInBand --coverage=false
+npm test -- --runInBand
+npm run coverage -- --runInBand
 ```
 
 Optional database integration tests use `TEST_EXECUTION_MONGO_URL=mongodb://127.0.0.1:27018/?directConnection=true`. They create and remove isolated test databases. See [architecture notes](docs/ARCHITECTURE-REFACTOR.md).
 
 Inventory updates and movement records are atomic per part. Operations spanning multiple parts are not a single stock reservation or distributed transaction. Cloud deployment and provider integrations require separate environment validation.
+
+## Coverage e SonarQube
+
+Jest usa `ts-jest` e coverage V8, seguindo o padrão do Service Orders. Os relatórios ficam em `coverage/lcov-report/index.html` (HTML) e `coverage/lcov.info` (SonarQube). A pipeline CI também executa a suíte com coverage.
+
+Use o mesmo SonarQube do projeto principal em `http://localhost:9000`. Crie o projeto com a chave `techchallenge-execution`, gere um token com permissão de análise e preencha `SONAR_TOKEN` no `.env` (copie `.env.example` se necessário). Depois de gerar o coverage:
+
+```bash
+npm run sonar
+```
+
+O launcher usa o token do ambiente sem expansão de shell e propaga falhas do scanner. Assim como no principal, sem `SONAR_TOKEN` a análise é ignorada. O Sonar roda localmente; a pipeline não tenta acessar `localhost:9000` do desenvolvedor.
 
 ## Development seed
 
