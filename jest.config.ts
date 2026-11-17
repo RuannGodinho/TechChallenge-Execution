@@ -27,7 +27,12 @@ const config: Config = {
     "!src/config/**",
     "!src/**/*.interface.ts",
     "!src/Interfaces/**",
-    "!src/application/dtos/**"
+    "!src/application/dtos/**",
+    "!src/**/*.dto.ts",
+    "!src/**/*.dtos.ts",
+    "!src/application/ports/**",
+    // This port also defines a runtime error, so it remains covered.
+    "src/application/ports/execution-order.port.ts"
   ],
 
   // The directory where Jest should output its coverage files
@@ -51,7 +56,9 @@ const config: Config = {
   // ],
 
   // An object that configures minimum threshold enforcement for coverage results
-  // coverageThreshold: undefined,
+  coverageThreshold: {
+    global: { statements: 81, branches: 81, functions: 81, lines: 81 },
+  },
 
   // A path to a custom dependency extractor
   // dependencyExtractor: undefined,

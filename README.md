@@ -38,6 +38,8 @@ Inventory updates and movement records are atomic per part. Operations spanning 
 
 Jest usa `ts-jest` e coverage V8, seguindo o padrão do Service Orders. Os relatórios ficam em `coverage/lcov-report/index.html` (HTML) e `coverage/lcov.info` (SonarQube). A pipeline CI também executa a suíte com coverage.
 
+Jest exige pelo menos **81% em linhas, statements, funções e branches**, inclusive na suíte padrão sem MongoDB. DTOs, declarações e contratos de ports sem lógica ficam fora do cálculo; as exclusões também estão configuradas no SonarQube. O port que contém `ExecutionOrderUnavailableError` permanece coberto, assim como controllers, gateways e regras de negócio.
+
 Use o mesmo SonarQube do projeto principal em `http://localhost:9000`. Crie o projeto com a chave `techchallenge-execution`, gere um token com permissão de análise e preencha `SONAR_TOKEN` no `.env` (copie `.env.example` se necessário). Depois de gerar o coverage:
 
 ```bash
