@@ -1,5 +1,7 @@
 # Kubernetes — execution
 
+Cobertura de APM, logs das APIs/workers, implantação e consultas NRQL: [New Relic](NEW-RELIC.md).
+
 Imagem: ruanngodinho/techchallenge-execution. API: execution-deployment; workers: execution-workers; banco: execution-mongo-deployment, mantido no infra-db.
 
 ## Organização e custo

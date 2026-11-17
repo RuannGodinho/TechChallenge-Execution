@@ -27,6 +27,8 @@ import { AtualizarServicoUseCase } from '../../application/usecases/servico/atua
 import { DeletarServicoUseCase } from '../../application/usecases/servico/deletar-servico.usecase';
 
 import { randomUUID } from 'node:crypto';
+import { IObservabilityPort } from '../../application/ports/observability.port';
+import { logIntegration } from '../logging/integration-logger';
 import { AtomicStockMongoGateway } from '../../Adapters/gateways/atomic-stock.mongo.gateway';
 import { ConsultarEstoqueUseCase } from '../../application/usecases/estoque/consultar-estoque.usecase';
 import { RegistrarMovimentacaoAtomicaUseCase } from '../../application/usecases/estoque/registrar-movimentacao-atomica.usecase';
@@ -41,7 +43,9 @@ export function createExecutionControllers(db: Db) {
     const executions = new ExecucaoServicoMongoGateway(db, process.env.EXECUTION_COMPLETION_TRANSPORT === 'rabbitmq');
     const reader = new OrdemServicoHttpGateway(process.env.SERVICE_ORDERS_URL, process.env.SERVICE_ORDERS_INTERNAL_API_KEY);
     const orders = process.env.EXECUTION_COMPLETION_TRANSPORT === 'rabbitmq' ? new ExecutionOrderMessagingGateway(reader,executions) : reader;
-    const observability = { emit: (event: unknown) => console.info(event) };
+    const observability: IObservabilityPort = {
+        emit: event => logIntegration(event.level ?? (event.alert ? 'error' : 'info'), event.msg, { ...event, event: 'business' }),
+    };
     const execucao = new ExecucaoServicoController(
         () => new ListarExecucoesPorOrdemUseCase(executions),
         () => new IniciarExecucaoUseCase(executions, orders, observability),
