@@ -136,9 +136,10 @@ jobs:
 
       - name: Deploy API and existing HPA pattern
         run: |
-          kubectl set image --local -f k8s/Api-deployment.yml \
-            api=ruanngodinho/techchallenge-execution:${{ steps.image.outputs.tag }} \
-            -o yaml | kubectl apply -f -
+          kubectl patch --local -f k8s/Api-deployment.yml --type=strategic \
+            -p '{"spec":{"template":{"spec":{"containers":[{"name":"api","image":"ruanngodinho/techchallenge-execution:${{ steps.image.outputs.tag }}"}]}}}}' \
+            -o yaml > "$RUNNER_TEMP/execution-api.yml"
+          kubectl apply -f "$RUNNER_TEMP/execution-api.yml"
           kubectl apply -f k8s/Api-service.yml
           kubectl apply -f k8s/API-hpa.yml
           kubectl rollout restart deployment/execution-deployment
@@ -146,16 +147,20 @@ jobs:
 
       - name: Deploy grouped workers
         run: |
-          kubectl set image --local -f k8s/workers-deployment.yml \
-            workers=ruanngodinho/techchallenge-execution:${{ steps.image.outputs.tag }} -o yaml | kubectl apply -f -
+          kubectl patch --local -f k8s/workers-deployment.yml --type=strategic \
+            -p '{"spec":{"template":{"spec":{"containers":[{"name":"workers","image":"ruanngodinho/techchallenge-execution:${{ steps.image.outputs.tag }}"}]}}}}' \
+            -o yaml > "$RUNNER_TEMP/execution-workers.yml"
+          kubectl apply -f "$RUNNER_TEMP/execution-workers.yml"
           kubectl rollout restart deployment/execution-workers
           kubectl rollout status deployment/execution-workers --timeout=180s
 
       - name: Run seed job using the existing one-time pattern
         run: |
           if ! kubectl get job execution-seed-job >/dev/null 2>&1; then
-            kubectl set image --local -f k8s/api-seed-job.yml \
-              seed=ruanngodinho/techchallenge-execution:${{ steps.image.outputs.tag }} -o yaml | kubectl apply -f -
+            kubectl patch --local -f k8s/api-seed-job.yml --type=strategic \
+              -p '{"spec":{"template":{"spec":{"containers":[{"name":"seed","image":"ruanngodinho/techchallenge-execution:${{ steps.image.outputs.tag }}"}]}}}}' \
+              -o yaml > "$RUNNER_TEMP/execution-seed.yml"
+            kubectl apply -f "$RUNNER_TEMP/execution-seed.yml"
           fi
           kubectl wait --for=condition=complete job/execution-seed-job --timeout=120s
 
