@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: execution-workers
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: execution-workers
+  template:
+    metadata:
+      labels:
+        app: execution-workers
+    spec:
+      containers:
+        - name: workers
+          image: 'ruanngodinho/techchallenge-execution:latest'
+          command:
+            - node
+            - run-workers.cjs
+            - src/infrastructure/messaging/execution-publisher.ts
+            - src/infrastructure/messaging/saga-worker.ts
+          envFrom:
+            - configMapRef:
+                name: execution-config
+            - secretRef:
+                name: execution-secrets
+          imagePullPolicy: Always
+      imagePullSecrets:
+        - name: dockerhub-cred

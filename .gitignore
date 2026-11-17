@@ -3,3 +3,6 @@ dist/
 coverage/
 .env
 .scannerwork/
+
+# Runtime credentials are supplied by GitHub Actions.
+k8s/secrets/api-secrets.yml

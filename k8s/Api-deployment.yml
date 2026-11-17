@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: execution-deployment
+spec:
+  selector:
+    matchLabels:
+      app: execution
+  template:
+    metadata:
+      labels:
+        app: execution
+    spec:
+      containers:
+        - name: api
+          image: 'ruanngodinho/techchallenge-execution:latest'
+          ports:
+            - containerPort: 3001
+          resources:
+            requests:
+              memory: 128Mi
+              cpu: 100m
+            limits:
+              memory: 256Mi
+              cpu: 500m
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3001
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 3001
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          envFrom:
+            - configMapRef:
+                name: execution-config
+            - secretRef:
+                name: execution-secrets
+          imagePullPolicy: Always
+      imagePullSecrets:
+        - name: dockerhub-cred

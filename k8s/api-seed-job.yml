@@ -1,0 +1,23 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: execution-seed-job
+spec:
+  template:
+    spec:
+      containers:
+        - name: seed
+          image: 'ruanngodinho/techchallenge-execution:latest'
+          command:
+            - npm
+            - run
+            - seed
+          envFrom:
+            - configMapRef:
+                name: execution-config
+            - secretRef:
+                name: execution-secrets
+          imagePullPolicy: Always
+      imagePullSecrets:
+        - name: dockerhub-cred
+      restartPolicy: OnFailure
