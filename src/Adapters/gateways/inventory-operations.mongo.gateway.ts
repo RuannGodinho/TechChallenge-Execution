@@ -9,7 +9,7 @@ export class InventoryOperationsMongoGateway implements InventoryOperations {
  async check(partId: string, quantity: number, orderId?: string): Promise<boolean> {
   const id = new ObjectId(partId);
   if (orderId && await this.duplicate(id, `order:${orderId}`, 'CONSUME', quantity)) return true;
-  return !!await this.stock.findOne({ pecaId: id, quantidade: { $gte: quantity } }, { projection: { _id: 1 } });
+  return !!await this.stock.findOne({ pecaId: id, $expr: { $gte: [{ $subtract: ['$quantidade', { $ifNull: ['$reservado', 0] }] }, quantity] } }, { projection: { _id: 1 } });
  }
  private async duplicate(partId: ObjectId, key: string, type: string, quantity: number): Promise<boolean> {
   const row = await this.stock.findOne({ pecaId: partId, 'movimentos.key': key }, { projection: { movimentos: { $elemMatch: { key } } } });
@@ -20,7 +20,7 @@ export class InventoryOperationsMongoGateway implements InventoryOperations {
  }
  async consume(orderId: string, partId: string, quantity: number): Promise<'applied' | 'duplicate'> {
   const id = new ObjectId(partId); const key = `order:${orderId}`;
-  const result = await this.stock.updateOne({ pecaId: id, quantidade: { $gte: quantity }, 'movimentos.key': { $ne: key } }, { $inc: { quantidade: -quantity }, $push: { movimentos: { key, type: 'CONSUME', quantity, at: new Date() } } } as never);
+  const result = await this.stock.updateOne({ pecaId: id, $expr: { $gte: [{ $subtract: ['$quantidade', { $ifNull: ['$reservado', 0] }] }, quantity] }, 'movimentos.key': { $ne: key } }, { $inc: { quantidade: -quantity }, $push: { movimentos: { key, type: 'CONSUME', quantity, at: new Date() } } } as never);
   if (result.modifiedCount) return 'applied';
   if (await this.duplicate(id, key, 'CONSUME', quantity)) return 'duplicate';
   throw new InventoryUnavailableError('insufficient inventory');

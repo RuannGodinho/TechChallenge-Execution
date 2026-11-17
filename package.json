@@ -9,7 +9,9 @@
     "test": "jest",
     "coverage": "jest --coverage",
     "check:architecture": "node scripts/check-architecture.cjs",
-    "execution-publisher": "node --import tsx ./src/infrastructure/messaging/execution-publisher.ts"
+    "execution-publisher": "node --import tsx ./src/infrastructure/messaging/execution-publisher.ts",
+    "seed": "node src/mongo-init/seed.js",
+    "saga-worker": "node --import tsx ./src/infrastructure/messaging/saga-worker.ts"
   },
   "dependencies": {
     "amqplib": "^0.10.9",

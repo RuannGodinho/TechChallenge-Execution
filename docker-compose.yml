@@ -23,6 +23,7 @@ services:
         until mongosh --host mongodb:27017 --quiet --eval 'db.adminCommand({ping:1}).ok' >/dev/null 2>&1; do sleep 1; done
         mongosh --host mongodb:27017 --quiet --eval 'try { rs.status(); } catch (e) { if (e.codeName !== "NotYetInitialized") throw e; rs.initiate({_id:"execution-rs",members:[{_id:0,host:"mongodb:27017"}]}); }'
   execution:
+    command: sh -c "npm run seed && npm start"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     build: .
@@ -38,12 +39,14 @@ services:
         condition: service_healthy
       mongodb-init:
         condition: service_completed_successfully
-  execution-publisher:
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+  workers:
     build: .
     env_file: .env
+    init: true
     restart: unless-stopped
+    stop_grace_period: 35s
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       MONGODB_URI: mongodb://mongodb:27017/execution?replicaSet=execution-rs
     depends_on:
@@ -51,6 +54,12 @@ services:
         condition: service_healthy
       mongodb-init:
         condition: service_completed_successfully
-    command: npm run execution-publisher
+    command:
+      - node
+      - run-workers.cjs
+      - src/infrastructure/messaging/execution-publisher.ts
+      - src/infrastructure/messaging/saga-worker.ts
+
+
 volumes:
   execution_data:

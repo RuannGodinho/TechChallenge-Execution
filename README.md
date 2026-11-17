@@ -1,3 +1,5 @@
+> Saga orquestrada: [fluxo, compensações, configuração e testes](docs/SAGA.md).
+
 # Execution service
 
 Execution owns parts, services, inventory, execution scheduling and execution lifecycle, with its own MongoDB database.
@@ -6,7 +8,7 @@ The original Portuguese HTTP paths are served here: `/api/pecas`, `/api/servicos
 
 ## Local Docker and RabbitMQ
 
-Configure this repository's `.env`, including `RABBITMQ_URL`, then start its database, API, and publisher:
+Configure this repository's `.env`, including `RABBITMQ_URL`, then start its database, API, and one supervised `workers` container (execution publisher and Saga):
 
 ```bash
 docker compose up -d --build
@@ -30,3 +32,30 @@ npm test -- --runInBand --coverage=false
 Optional database integration tests use `TEST_EXECUTION_MONGO_URL=mongodb://127.0.0.1:27018/?directConnection=true`. They create and remove isolated test databases. See [architecture notes](docs/ARCHITECTURE-REFACTOR.md).
 
 Inventory updates and movement records are atomic per part. Operations spanning multiple parts are not a single stock reservation or distributed transaction. Cloud deployment and provider integrations require separate environment validation.
+
+## Development seed
+
+`docker compose up -d --build` runs `npm run seed` automatically before starting the API (after database initialization). Set `SEED_ENABLED=false` in `.env` to skip demo data. The seeds insert missing fixtures only; restarting does not overwrite edited records, reset stock, or renew expired estimates.
+
+Execution populates `Pecas` (three parts/supplies), `Servicos` (three services), and `Estoque` (40 liters of oil, 20 filters, 10 brake pad sets). Each new stock document includes one initial receipt in its embedded movement history, visible through the stock movement API. Existing stock and catalog data are preserved. Execution records and outbox events are created through the normal business flow. The script is `src/mongo-init/seed.js`; a MongoDB replica set is required, as configured by Compose.
+
+To run again manually with the configured Compose environment:
+
+```bash
+docker compose exec execution npm run seed
+```
+
+## Compact Docker Compose
+
+The default Compose groups this service's background workers in one `workers` container, separate from the API. `run-workers.cjs` launches each worker as its own Node process, forwards shutdown signals, and stops the group if any worker exits. Docker restarts the group on failure. The shutdown timeout is 25 seconds; Compose allows 35 seconds. Individual npm worker commands remain available for separate Kubernetes workloads.
+
+To replace the previous individual worker containers, run inside this repository:
+
+```bash
+docker compose up -d --build --remove-orphans
+docker compose logs -f workers
+```
+
+Database volumes, API ports, seeds, migrations, broker and queue contracts are unchanged. The two MongoDB replica sets remain separate to preserve existing data and transactions. The MongoDB initializer containers are temporary; they exit after configuration.
+
+Across Service Orders, Execution and Billing, this changes the number of permanent containers from 17 to 11 (3 + 3 + 5), plus two temporary MongoDB initializers. Worker processes still have their own memory and database connections. This reduces container count without guaranteeing proportional RAM or AWS cost savings. Workers in the same group restart together and cannot scale independently through Compose. Size Kubernetes requests and replicas from measurements; the Kubernetes manifests have not been changed by this Compose optimization.

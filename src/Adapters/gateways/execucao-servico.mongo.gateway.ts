@@ -35,6 +35,7 @@ export class ExecucaoServicoMongoGateway implements IExecucaoServicoGateway {
             return;
         }
 
+        if (execucoes.length && await this.db.collection('PreparacoesExecucao').findOne({orderId:execucoes[0].ordemServicoId})) throw new ExecutionLifecycleConflict('Agendamento controlado pela Saga');
         const rows = execucoes.map((execucao) => ExecucaoServicoMapper.toPersistence(execucao));
         const persist = async (session?: ClientSession) => {
             if (session) {
@@ -89,6 +90,7 @@ export class ExecucaoServicoMongoGateway implements IExecucaoServicoGateway {
     }
 
     async update(id: string, execucao: Partial<ExecucaoServico>): Promise<ExecucaoServico | null> {
+        if (execucao.status?.value === 'EM EXECUCAO' && ObjectId.isValid(id)) { const row=await this.collection.findOne({_id:new ObjectId(id)}); const sagaId=(row as any)?.sagaId; if(sagaId && !await this.db.collection<any>('PreparacoesExecucao').findOne({_id:sagaId,state:'AUTORIZADA'})) throw new ExecutionLifecycleConflict('Preparação não autorizada'); }
         if (!this.messaging || execucao.status?.value !== 'FINALIZADO') return this.updateRecord(id,execucao);
         if (!ObjectId.isValid(id)) return null;
         const session = this.db.client.startSession();

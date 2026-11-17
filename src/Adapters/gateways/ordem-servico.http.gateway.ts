@@ -11,10 +11,10 @@ export class OrdemServicoHttpGateway implements ExecutionOrderPort {
             if (!response.ok) throw new Error(`Service Orders retornou ${response.status}`);
             const row: unknown = await response.json();
             if (!row || typeof row !== 'object' || !('id' in row) || row.id !== id || !('status' in row) || typeof row.status !== 'string') throw new Error('Resposta de ordem inválida');
-            return { id, status: row.status };
+            return { id, status: row.status, canStart: 'canStart' in row ? row.canStart === true : row.status === 'EM EXECUCAO' };
         } catch (error) { throw new ExecutionOrderUnavailableError(error instanceof Error ? error.message : 'Service Orders indisponível'); }
     }
-    async findById(id: string) { const row = await this.request(id); return row ? { id: row.id, canStart: row.status === 'EM EXECUCAO' } : null; }
+    async findById(id: string) { const row = await this.request(id); return row ? { id: row.id, canStart: row.canStart } : null; }
     async complete(id: string): Promise<void> {
         const result = await this.request(id, 'PATCH');
         if (!result || !['FINALIZADA','ENTREGUE'].includes(result.status)) throw new ExecutionOrderUnavailableError('Ordem não finalizada pelo Service Orders');

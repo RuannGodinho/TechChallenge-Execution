@@ -29,7 +29,7 @@ export class AtomicStockMongoGateway implements AtomicStockPort {
         const key = `movement:${operationId}`;
         const entry: StoredMovement = { key, type: tipo, quantity, origem: movement.origem.value, at: movement.data };
         const stock = this.db.collection('Estoque');
-        const filter = { pecaId, 'movimentos.key': { $ne: key }, ...(movement.tipo.isSaida() ? { quantidade: { $gte: quantity } } : {}) };
+        const filter = { pecaId, 'movimentos.key': { $ne: key }, ...(movement.tipo.isSaida() ? { $expr: { $gte: [{ $subtract: ['$quantidade', { $ifNull: ['$reservado', 0] }] }, quantity] } } : {}) };
         const update = { $inc: { quantidade: movement.tipo.isEntrada() ? quantity : -quantity }, $push: { movimentos: entry } };
         try {
             const result = await stock.updateOne(filter, update as never, { upsert: movement.tipo.isEntrada() });

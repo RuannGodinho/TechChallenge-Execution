@@ -12,7 +12,7 @@ test('consumption atomically enforces quantity and operation uniqueness', async 
  const { gateway, updateOne } = setup(); updateOne.mockResolvedValue({ modifiedCount: 1 });
  await expect(gateway.consume(orderId, partId, 2)).resolves.toBe('applied');
  expect(updateOne).toHaveBeenCalledWith(
-  { pecaId: new ObjectId(partId), quantidade: { $gte: 2 }, 'movimentos.key': { $ne: `order:${orderId}` } },
+  { pecaId: new ObjectId(partId), $expr: { $gte: [{ $subtract: ['$quantidade', { $ifNull: ['$reservado', 0] }] }, 2] }, 'movimentos.key': { $ne: `order:${orderId}` } },
   expect.objectContaining({ $inc: { quantidade: -2 }, $push: { movimentos: expect.objectContaining({ key: `order:${orderId}`, quantity: 2 }) } }),
  );
 });
